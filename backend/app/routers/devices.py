@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.crypto import encrypt_imei, imei_fingerprint, mask_imei
 from app.db import get_db
 from app.deps import get_current_user
-from app.models import Case, Device, Observation, OwnershipProof, User
+from app.models import BeaconKey, Case, Device, FinderReport, Observation, OwnershipProof, User
 from app.schemas import DeviceIn, DeviceOut
 
 router = APIRouter(prefix="/devices", tags=["devices"])
@@ -102,9 +102,12 @@ def delete_device(
 ) -> Response:
     device = get_owned(db, user, device_id)
     case_ids = select(Case.id).where(Case.device_id == device.id)
+    obs_ids = select(Observation.id).where(Observation.case_id.in_(case_ids))
+    db.execute(delete(FinderReport).where(FinderReport.observation_id.in_(obs_ids)))
     db.execute(delete(Observation).where(Observation.case_id.in_(case_ids)))
     db.execute(delete(Case).where(Case.device_id == device.id))
     db.execute(delete(OwnershipProof).where(OwnershipProof.device_id == device.id))
+    db.execute(delete(BeaconKey).where(BeaconKey.device_id == device.id))
     db.delete(device)
     db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)

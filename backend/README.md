@@ -36,6 +36,28 @@ Modular monolith: one FastAPI service, one PostgreSQL database.
 - **All sightings are simulated** and labelled `source: "simulated"`; the endpoints need `DEMO_MODE=true`. No real BLE source exists yet.
 - Two new tables (`cases`, `observations`) are created automatically; existing databases need no migration. Deleting a device deletes its cases and sightings.
 
+## Slice 5 (done): AI explanation (Meta Model API, Muse Spark 1.3)
+
+- `POST /cases/{id}/explanation`: explains the case's stored sightings. Owner only (404 otherwise), 10 per hour per user.
+- The model calls **read-only tools** (`get_case_summary`, `list_observations`, `get_observation`). The case is fixed by the backend; the model cannot name another case, and nothing is written.
+- It must return JSON in a fixed shape (headline, findings, guidance, uncertainty). Every finding must cite ids of real sightings.
+- A guard rejects: unknown ids, words that decide or accuse (stolen, thief, suspect, definitely, ...), and any coordinate that is not a stored sighting. One repair try, then fallback.
+- **Fallback**: with no key, an outage, or rejected output, the endpoint returns a fixed-wording explanation with `source: "fallback"` and the reason. The `facts` counts always come from plain code, never the model.
+- Data sent to the provider: sighting id, time, coordinates, accuracy, status, flags. Never email, IMEI, nickname or model.
+- Set `MODEL_API_KEY` in `.env` (never in chat or git). Standard tier only. If the API rejects `response_format`, set `MODEL_STRUCTURED_OUTPUT=false`.
+- Not yet verified against the live API (the cloud workspace cannot reach it). Run the live check on your laptop.
+
+## Slice 7 (done): companion-app endpoints and Bluetooth reports
+
+For the Android app (not built yet). Everything below is tested with a fake finder; no real Bluetooth has been exercised.
+
+- `POST /companion/devices/{id}/challenge`: the phone asks for the ownership code and shows it on its own screen; the owner types it on the website. Proof channel is `companion_app`. Works with `DEMO_MODE` off.
+- `POST /companion/devices/{id}/enroll`: after verification, returns the phone's `beacon_secret` (32 bytes, base64url). Stored encrypted. Asking again returns the same secret.
+- **Rotating ID** (`app/beacon.py`): every 15 minutes the phone broadcasts `HMAC-SHA256(secret, "tracelink-beacon:" + window)[:8]` (hex), `window = unix_time // 900`. A fixed test vector pins the formula for the Android code.
+- `POST /reports`: any signed-in finder says "I heard beacon X here, at this time" (`beacon_id`, `observed_at`, `lat`, `lon`, `accuracy_m`, `nonce`). The server matches it only against devices with an **active case**, adds 50 m for Bluetooth range, and runs the same evidence rules. The sighting is stored with `source: "ble"`. The reply is always `202 {"status":"received"}`, so finders cannot learn who owns a beacon or whether a case exists. 120 reports per hour per account.
+- A new table `finder_reports` records which account reported (abuse handling only). New tables `beacon_keys` and `finder_reports` need no migration.
+- Limits: the app signs in with the same account, so the code proves "account plus the phone's screen", not hardware attestation. A finder can lie about its own GPS position; the rules catch impossible jumps but not a consistent lie. Reports are not yet signed per device.
+
 Documentation of technologies, patterns and data structures: `../docs/TECHNICAL_DECISIONS.md`.
 
 ## Run
@@ -69,3 +91,7 @@ python3 -m pytest -q        # uses an in-memory database, needs no setup
 - No rate limiting yet (backlog item 11); login can be brute-forced until it is added.
 - Tables are created at startup, not by migrations.
 - No token revocation or refresh; logging out only discards the token on the client.
+
+## Frontend
+
+See `../frontend/README.md`. Start this API with `DEMO_MODE=true`, then `npm run dev` in `frontend/`.

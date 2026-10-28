@@ -24,6 +24,18 @@ class Settings(BaseSettings):
     # for "the code shown on the phone". Off by default: with it off, the API
     # refuses to issue codes until a real delivery channel (the Android app) exists.
     demo_mode: bool = False
+    # Meta Model API (OpenAI-compatible). Empty key = AI disabled; the explanation
+    # endpoint then returns the deterministic fallback. The key lives only in .env.
+    model_api_key: str = ""
+    model_base_url: str = "https://api.meta.ai/v1"
+    model_name: str = "muse-spark-1.3"
+    model_timeout_s: float = 30.0
+    # Send a JSON-schema response_format. Turn off if the provider rejects it
+    # (the answer is validated with Pydantic either way).
+    model_structured_output: bool = True
+    explain_per_hour: int = 10
+    # Bluetooth sighting reports accepted per finder account per hour.
+    reports_per_hour: int = 120
 
 
 @lru_cache

@@ -104,3 +104,27 @@ class SimulatedItemOut(BaseModel):
 class SimulationOut(BaseModel):
     scenario: str
     results: list[SimulatedItemOut]
+
+
+class EnrollOut(BaseModel):
+    """Everything the phone needs to broadcast. Shown only to the device's owner."""
+
+    beacon_secret: str  # url-safe base64, 32 bytes
+    window_seconds: int
+    id_bytes: int
+
+
+class ReportIn(BaseModel):
+    """A finder phone says: I heard this beacon here, at this time."""
+
+    beacon_id: str = Field(pattern=r"^[0-9a-f]{16}$")
+    observed_at: AwareDatetime
+    lat: float = Field(ge=-90, le=90)
+    lon: float = Field(ge=-180, le=180)
+    accuracy_m: float = Field(ge=0, le=100000)
+    nonce: str = Field(pattern=r"^[A-Za-z0-9_-]{8,64}$")
+
+
+class ReportOut(BaseModel):
+    # Always the same answer, so a finder cannot learn whether a beacon belongs to anyone.
+    status: str = "received"

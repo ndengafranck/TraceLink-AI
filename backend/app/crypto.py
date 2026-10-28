@@ -57,3 +57,11 @@ def proof_digest(device_id: str, code: str) -> str:
     """
     key = get_settings().imei_hmac_key.encode()
     return hmac.new(key, f"proof:{device_id}:{code}".encode(), hashlib.sha256).hexdigest()
+
+
+def encrypt_secret(raw: bytes) -> str:
+    return Fernet(get_settings().imei_encryption_key.encode()).encrypt(raw).decode()
+
+
+def decrypt_secret(token: str) -> bytes:
+    return Fernet(get_settings().imei_encryption_key.encode()).decrypt(token.encode())

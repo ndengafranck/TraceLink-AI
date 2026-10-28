@@ -110,3 +110,27 @@ class Observation(Base):
     nonce: Mapped[str] = mapped_column(String(64))
     validation_status: Mapped[str] = mapped_column(String(20))
     flags: Mapped[list] = mapped_column(JSON, default=list)
+
+
+class BeaconKey(Base):
+    """Secret that lets a phone derive its rotating Bluetooth ID (and the server check it).
+
+    A separate table (not a Device column) so existing databases need no migration.
+    The secret is encrypted at rest.
+    """
+
+    __tablename__ = "beacon_keys"
+
+    device_id: Mapped[str] = mapped_column(ForeignKey("devices.id"), primary_key=True)
+    secret_encrypted: Mapped[str] = mapped_column(String(255))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+
+class FinderReport(Base):
+    """Which account reported a Bluetooth sighting (kept for abuse handling only)."""
+
+    __tablename__ = "finder_reports"
+
+    observation_id: Mapped[str] = mapped_column(ForeignKey("observations.id"), primary_key=True)
+    reporter_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)

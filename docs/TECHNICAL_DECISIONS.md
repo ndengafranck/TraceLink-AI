@@ -225,3 +225,31 @@ Run them: `cd backend && python3 -m pytest -q`.
 - **Location history has no retention job and no read audit log yet** (backlog item 11). Deleting a device deletes its cases and sightings; nothing else removes them.
 - **Not started:** the AI module, frontend, audit log, retention job, Android BLE.
 - **Key management:** losing `IMEI_ENCRYPTION_KEY` makes stored IMEIs unreadable; changing `IMEI_HMAC_KEY` breaks duplicate detection and existing ownership codes. Back both up.
+
+
+## Slice 5: AI module
+
+| Decision | Why |
+|---|---|
+| Provider interface (`ModelClient`) with an HTTP implementation | Tests use a scripted fake; the model can be swapped without touching logic. Strategy pattern. |
+| Read-only tools, case fixed by the backend | The model gathers evidence itself (tool use) but cannot reach other cases or change data. |
+| Pydantic output schema with `extra="forbid"` | Model output is untrusted; wrong shape is rejected, not repaired silently. |
+| Deterministic guard (ids, forbidden words, coordinates) | Enforces "never invents locations, never accuses" in code, not only in the prompt. |
+| One repair try, then fixed fallback | Bounded cost and latency; the product works with the AI off. |
+| Facts counted in code | Numbers shown to the user never depend on the model. |
+| Low reasoning effort | Short grounded explanations; lower cost. |
+
+Limits: the guard blocks listed words, not every possible bad phrasing; the rate limiter is per process; the live API call is untested until run with a real key.
+
+
+## Slice 7: companion endpoints and Bluetooth reports
+
+| Decision | Why |
+|---|---|
+| Rotating ID = truncated HMAC of a per-device secret and a 15-minute window | Nobody but the owner and the server can link two broadcasts or predict the next ID, so the beacon is not a tracking tool. Both sides compute it from the same shared secret; no ID list is stored. |
+| Match only devices with an active case | Phones that are not reported lost are never matched, so finders create no data about them. |
+| Uniform `202 received` for every report | A finder cannot use the endpoint as an oracle for who owns a beacon. |
+| +50 m on every Bluetooth sighting | Hearing a beacon means "within range", not "at the finder's exact GPS point". The ring on the chart stays honest. |
+| Separate tables (`beacon_keys`, `finder_reports`) | Existing databases need no migration. |
+| Phone requests the code, website verifies it | The code is shown on the device's own screen. Weakness stated in the README: same account, no hardware attestation. |
+| Constant-work comparison over three windows | Absorbs clock skew without leaking which window matched. |

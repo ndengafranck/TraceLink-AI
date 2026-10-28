@@ -8,10 +8,13 @@ Limits (all tested):
 - a newer code cancels any older open one;
 - the code is stored only as a keyed hash bound to the device.
 
-Honest limitation: the code must reach the phone through some channel. The
-Android companion app is that channel, and it does not exist yet. In demo mode
-the API returns the code itself, and the proof is labelled channel "demo" so a
-simulated check can never pass as a real one.
+Two channels, always labelled on the proof:
+- "companion_app": the TraceLink Android app on the phone requests the code
+  (routers/companion.py) and shows it on the phone's screen; the owner types it
+  into the website.
+- "demo": DEMO_MODE only; the API returns the code itself.
+Limitation: the app signs in with the same account, so this proves "someone with
+the account and the phone screen", not hardware attestation.
 """
 
 import hmac
@@ -42,19 +45,14 @@ def _aware(dt: datetime) -> datetime:
     return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
 
 
-@router.post("/challenge", response_model=ChallengeOut, status_code=status.HTTP_201_CREATED)
-def create_challenge(
-    device_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)
-) -> ChallengeOut:
-    device = get_owned(db, user, device_id)
+def issue_challenge(db: Session, device: Device, channel: str) -> tuple[OwnershipProof, str]:
+    """Create a one-time code for a device and return (proof row, plain code).
+
+    The caller decides where the code is shown. Limits (3 per hour, older codes
+    cancelled) apply to every channel.
+    """
     if device.status == "verified":
         raise HTTPException(status.HTTP_409_CONFLICT, "Device is already verified")
-    if not get_settings().demo_mode:
-        raise HTTPException(
-            status.HTTP_503_SERVICE_UNAVAILABLE,
-            "No channel is configured to deliver the code to the device",
-        )
-
     now = datetime.now(timezone.utc)
     recent = db.scalar(
         select(func.count())
@@ -78,11 +76,28 @@ def create_challenge(
     proof = OwnershipProof(
         device_id=device.id,
         code_digest=proof_digest(device.id, code),
-        channel="demo",
+        channel=channel,
         expires_at=now + CODE_TTL,
     )
     db.add(proof)
     db.commit()
+    return proof, code
+
+
+@router.post("/challenge", response_model=ChallengeOut, status_code=status.HTTP_201_CREATED)
+def create_challenge(
+    device_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+) -> ChallengeOut:
+    """Demo channel: the API returns the code itself. Off unless DEMO_MODE=true."""
+    device = get_owned(db, user, device_id)
+    if device.status == "verified":
+        raise HTTPException(status.HTTP_409_CONFLICT, "Device is already verified")
+    if not get_settings().demo_mode:
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "Demo codes are off. Request the code from the TraceLink app on the phone.",
+        )
+    proof, code = issue_challenge(db, device, "demo")
     return ChallengeOut(channel=proof.channel, expires_at=proof.expires_at, code=code)
 
 

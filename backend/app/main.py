@@ -6,7 +6,7 @@ from fastapi.responses import JSONResponse
 
 from app import models  # noqa: F401  (registers tables on Base.metadata)
 from app.db import Base, engine
-from app.routers import auth, cases, devices, observations, ownership
+from app.routers import auth, cases, companion, devices, explanation, observations, ownership, reports
 
 
 @asynccontextmanager
@@ -37,6 +37,9 @@ app.include_router(devices.router)
 app.include_router(ownership.router)
 app.include_router(cases.router)
 app.include_router(observations.router)
+app.include_router(explanation.router)
+app.include_router(companion.router)
+app.include_router(reports.router)
 
 
 @app.get("/health", tags=["meta"])
