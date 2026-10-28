@@ -3,6 +3,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app import audit
 from app.crypto import encrypt_imei, imei_fingerprint, mask_imei
 from app.db import get_db
 from app.deps import get_current_user
@@ -72,6 +73,7 @@ def register_device(
     except IntegrityError:  # simultaneous registration of the same IMEI
         db.rollback()
         raise HTTPException(status.HTTP_409_CONFLICT, "This device is already registered")
+    audit.record(db, user.id, "device_added", "device", device.id)
     return to_out(device)
 
 
@@ -110,4 +112,5 @@ def delete_device(
     db.execute(delete(BeaconKey).where(BeaconKey.device_id == device.id))
     db.delete(device)
     db.commit()
+    audit.record(db, user.id, "device_deleted", "device", device_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

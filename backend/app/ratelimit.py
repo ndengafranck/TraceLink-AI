@@ -18,9 +18,31 @@ class SlidingWindow:
         q.append(now)
         return True
 
+    def count(self, key: str, window_s: float) -> int:
+        """Hits in the window, without recording a new one."""
+        now = time.monotonic()
+        q = self._hits[key]
+        while q and now - q[0] > window_s:
+            q.popleft()
+        return len(q)
+
+    def add(self, key: str) -> None:
+        self._hits[key].append(time.monotonic())
+
+    def clear(self, key: str) -> None:
+        self._hits.pop(key, None)
+
     def reset(self) -> None:
         self._hits.clear()
 
 
 explain_limiter = SlidingWindow()
 report_limiter = SlidingWindow()
+login_failures = SlidingWindow()
+
+ALL = (explain_limiter, report_limiter, login_failures)
+
+
+def reset_all() -> None:
+    for limiter in ALL:
+        limiter.reset()

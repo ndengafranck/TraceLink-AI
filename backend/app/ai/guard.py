@@ -5,6 +5,8 @@ Rules (all deterministic):
    of this case.
 2. No decision or accusation words (stolen, thief, suspect, ...).
 3. Any coordinate-looking number must match a stored sighting.
+4. No clock times or dates (the model's time zone differs from the screen's), and no
+   leaked field names.
 """
 
 import re
@@ -18,6 +20,8 @@ FORBIDDEN = re.compile(
     re.IGNORECASE,
 )
 COORD = re.compile(r"-?\d{1,3}\.\d{3,}")
+CLOCK = re.compile(r"\b\d{4}-\d{2}-\d{2}\b|\b\d{1,2}:\d{2}\b")
+FIELD_LEAK = re.compile(r"\bsource\s+(simulated|ble)\b", re.IGNORECASE)
 TOLERANCE = 0.0006  # about 60 m: allows rounding to 3 or 4 decimals
 
 
@@ -41,6 +45,10 @@ def check(e: Explanation, observations: list[Observation]) -> list[str]:
         if m:
             problems.append(f"forbidden word '{m.group(0)}': never state or imply a decision, "
                             "certainty or accusation")
+        if CLOCK.search(t):
+            problems.append("do not write clock times or dates; say how long ago instead")
+        if FIELD_LEAK.search(t):
+            problems.append("write 'simulated demo data' in plain words, not field names")
         for c in COORD.findall(t):
             if not any(abs(float(c) - k) <= TOLERANCE for k in known):
                 problems.append(f"coordinate {c} does not match any stored sighting")

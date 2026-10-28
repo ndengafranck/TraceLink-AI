@@ -57,7 +57,6 @@ def observation_view(o: Observation, now: datetime) -> dict[str, Any]:
     return {
         "id": o.id,
         "source": o.source,
-        "observed_at": aware(o.observed_at).isoformat(),
         "age_minutes": max(0, int((now - aware(o.observed_at)).total_seconds() // 60)),
         "lat": o.lat,
         "lon": o.lon,

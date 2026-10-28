@@ -15,6 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app import audit
 from app.beacon import matches
 from app.config import get_settings
 from app.crypto import decrypt_secret
@@ -61,5 +62,6 @@ def submit_report(
         if obs is not None:
             db.add(FinderReport(observation_id=obs.id, reporter_id=user.id))
             db.commit()
+            audit.record(db, case.opened_by, "sighting_received", "case", case.id, "ble")
         break
     return ReportOut()

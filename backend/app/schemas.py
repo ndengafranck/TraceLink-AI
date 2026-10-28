@@ -128,3 +128,12 @@ class ReportIn(BaseModel):
 class ReportOut(BaseModel):
     # Always the same answer, so a finder cannot learn whether a beacon belongs to anyone.
     status: str = "received"
+
+
+class AuditOut(BaseModel):
+    id: str
+    action: str
+    target_type: str | None
+    target_id: str | None
+    detail: str | None
+    created_at: datetime

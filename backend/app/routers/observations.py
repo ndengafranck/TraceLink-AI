@@ -12,6 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app import audit
 from app.config import get_settings
 from app.db import get_db
 from app.deps import get_current_user
@@ -180,4 +181,5 @@ def simulate(
                 reason=verdict.reason,
             )
         )
+    audit.record(db, user.id, "demo_sightings_added", "case", case.id, body.scenario)
     return SimulationOut(scenario=body.scenario, results=results)

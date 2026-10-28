@@ -274,3 +274,40 @@ def test_http_client_errors_never_leak_the_key(monkeypatch, failure):
     with pytest.raises(ModelUnavailable) as e:
         HttpModelClient(_settings()).chat(messages=[])
     assert "SECRET-KEY-123" not in str(e.value)
+
+
+# --- found on the first live run with the real model ----------------------------
+
+@pytest.mark.parametrize("text", [
+    "One sighting from 2026-10-27 at 06:19 is stale.",
+    "Three sightings were accepted from 12:08 to 12:16.",
+])
+def test_clock_times_and_dates_are_rejected(client, case, text):
+    cid, h = case
+    real = ids(client, cid, h)
+    use(FakeClient(answer(real[:1], text=text), answer(real[:1], text=text)))
+    assert explain(client, cid, h).json()["fallback_reason"] == "ai_output_rejected"
+
+
+def test_leaked_field_names_are_rejected(client, case):
+    cid, h = case
+    real = ids(client, cid, h)
+    bad = answer(real[:1], text="It is demo data with source simulated.")
+    use(FakeClient(bad, bad))
+    assert explain(client, cid, h).json()["fallback_reason"] == "ai_output_rejected"
+
+
+def test_relative_wording_is_accepted(client, case):
+    cid, h = case
+    real = ids(client, cid, h)
+    use(FakeClient(answer(real[:1], text="This sighting is about 2 hours old, simulated demo data.")))
+    assert explain(client, cid, h).json()["source"] == "ai"
+
+
+def test_model_never_sees_absolute_times(client, case, db_session):
+    from datetime import datetime, timezone
+    from sqlalchemy import select
+    from app.models import Observation
+    mine = list(db_session.scalars(select(Observation)))
+    out = run_tool("list_observations", {}, mine, datetime.now(timezone.utc))
+    assert "observed_at" not in out and "age_minutes" in out

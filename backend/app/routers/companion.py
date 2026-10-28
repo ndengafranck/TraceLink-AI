@@ -6,6 +6,7 @@ import secrets
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
+from app import audit
 from app.beacon import ID_BYTES, WINDOW_SECONDS
 from app.crypto import decrypt_secret, encrypt_secret
 from app.db import get_db
@@ -41,6 +42,7 @@ def enroll(
         key = BeaconKey(device_id=device.id, secret_encrypted=encrypt_secret(secrets.token_bytes(32)))
         db.add(key)
         db.commit()
+        audit.record(db, user.id, "beacon_enrolled", "device", device.id)
     secret = decrypt_secret(key.secret_encrypted)
     return EnrollOut(
         beacon_secret=base64.urlsafe_b64encode(secret).decode(),

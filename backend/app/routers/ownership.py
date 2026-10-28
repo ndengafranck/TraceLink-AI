@@ -25,6 +25,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app import audit
 from app.config import get_settings
 from app.crypto import proof_digest
 from app.db import get_db
@@ -81,6 +82,7 @@ def issue_challenge(db: Session, device: Device, channel: str) -> tuple[Ownershi
     )
     db.add(proof)
     db.commit()
+    audit.record(db, device.owner_id, "code_requested", "device", device.id, channel)
     return proof, code
 
 
@@ -137,4 +139,5 @@ def verify(
     proof.verified_at = now
     device.status = "verified"
     db.commit()
+    audit.record(db, user.id, "ownership_verified", "device", device.id, proof.channel)
     return to_out(device, proof.channel)

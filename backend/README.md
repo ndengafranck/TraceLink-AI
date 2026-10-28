@@ -92,6 +92,12 @@ python3 -m pytest -q        # uses an in-memory database, needs no setup
 - Tables are created at startup, not by migrations.
 - No token revocation or refresh; logging out only discards the token on the client.
 
+## Slice 8 (done): login lockout, audit trail, demo data
+
+- **Login lockout:** 5 failed logins for an email in 15 minutes lock that email for the rest of the window (HTTP 429, `Retry-After: 900`), even for the right password. Unknown emails are counted the same way, so the response never reveals which emails exist. A successful login resets the count. Trade-off: someone can lock a known email out for 15 minutes; that is accepted over allowing unlimited guessing. In-memory, per process.
+- **Audit trail:** `GET /audit` returns your own recent actions (registered, login, login_failed, device_added, device_deleted, code_requested, ownership_verified, beacon_enrolled, case_opened/recovered/closed, demo_sightings_added, sighting_received, explanation_requested). It stores ids and short labels only: never passwords, codes, IMEIs, secrets or coordinates (tested). New table `audit_events`; no migration needed.
+- **Demo data:** `python seed_demo.py` (with `DEMO_MODE=true`) creates `demo@example.com` / `demo-password-2026` with a verified phone, an open case with simulated sightings, and a second unverified phone. Safe to run again.
+
 ## Frontend
 
 See `../frontend/README.md`. Start this API with `DEMO_MODE=true`, then `npm run dev` in `frontend/`.

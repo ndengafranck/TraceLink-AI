@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app import audit
 from app.ai.client import ModelClient, build_client
 from app.ai.schemas import ExplanationResponse
 from app.ai.service import explain
@@ -35,4 +36,6 @@ def explain_case(
     if not explain_limiter.allow(user.id, settings.explain_per_hour):
         raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "Too many explanation requests")
     observations = list(db.scalars(select(Observation).where(Observation.case_id == case.id)))
-    return explain(settings, client, observations, datetime.now(timezone.utc))
+    result = explain(settings, client, observations, datetime.now(timezone.utc))
+    audit.record(db, user.id, "explanation_requested", "case", case.id, result.source)
+    return result

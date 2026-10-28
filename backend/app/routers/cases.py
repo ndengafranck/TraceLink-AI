@@ -15,6 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app import audit
 from app.db import get_db
 from app.deps import get_current_user
 from app.models import Case, Device, User
@@ -53,6 +54,7 @@ def _transition(db: Session, case: Case, target: str) -> Case:
     if target == "closed":
         case.closed_at = datetime.now(timezone.utc)
     db.commit()
+    audit.record(db, case.opened_by, f"case_{target}", "case", case.id)
     return case
 
 
@@ -76,6 +78,7 @@ def open_case(
     except IntegrityError:  # two simultaneous requests; the partial unique index caught it
         db.rollback()
         raise HTTPException(status.HTTP_409_CONFLICT, "A case is already open for this device")
+    audit.record(db, user.id, "case_opened", "case", case.id)
     return case
 
 

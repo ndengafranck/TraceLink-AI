@@ -10,6 +10,8 @@ interface Props {
 
 export function Ledger({ observations, lit, onHover }: Props) {
   const nums = numbering(observations);
+  // The page banner already says "demo data". Tag single rows only when real and simulated are mixed.
+  const mixed = observations.some((o) => o.source === "simulated") && observations.some((o) => o.source !== "simulated");
   const rows = [...observations].sort((a, b) => +new Date(b.observed_at) - +new Date(a.observed_at));
   return (
     <ul className="ledger">
@@ -26,7 +28,7 @@ export function Ledger({ observations, lit, onHover }: Props) {
               {o.lat.toFixed(4)}, {o.lon.toFixed(4)} · error {Math.round(o.accuracy_m)} m
             </div>
             <div className="flags">
-              {o.source === "simulated" && <span className="chip demo">Simulated</span>}
+              {mixed && o.source === "simulated" && <span className="chip demo">Simulated</span>}
               {o.source === "ble" && <span className="chip plain">Bluetooth report</span>}
               {o.flags.length === 0
                 ? <span className="chip">Passed every check</span>

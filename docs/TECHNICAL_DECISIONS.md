@@ -253,3 +253,14 @@ Limits: the guard blocks listed words, not every possible bad phrasing; the rate
 | Separate tables (`beacon_keys`, `finder_reports`) | Existing databases need no migration. |
 | Phone requests the code, website verifies it | The code is shown on the device's own screen. Weakness stated in the README: same account, no hardware attestation. |
 | Constant-work comparison over three windows | Absorbs clock skew without leaking which window matched. |
+
+
+## Slice 8: hardening and demo data
+
+| Decision | Why |
+|---|---|
+| Lockout counted per email, before hashing, for unknown emails too | Stops password guessing without revealing which emails exist, and without spending CPU on hashing when locked. Cost: a known email can be locked out for 15 minutes. |
+| Audit rows hold ids and labels only | The log must not leak what the rest of the system protects. A test scans the log for the password, IMEI and beacon secret. |
+| Each audit call commits on its own | A failed action (wrong password) is still recorded. |
+| Audit has no foreign key to devices | The record of a deletion survives the deletion. |
+| Seed script goes through the real API | The demo data takes the same path as real data, so the demo cannot show something the rules would reject. |

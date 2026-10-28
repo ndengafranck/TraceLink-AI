@@ -2,7 +2,7 @@
 
 React 18 + TypeScript + Vite. No UI library and no map-tile service: the chart is plain SVG drawn from your own data.
 
-## Run (two terminals)
+## Run (two terminals: backend first, then this)
 
 ```bash
 # 1. backend (from ../backend, with DEMO_MODE=true in .env)
