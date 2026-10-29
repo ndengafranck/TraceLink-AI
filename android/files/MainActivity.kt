@@ -52,6 +52,8 @@ fun App() {
     var api by remember { mutableStateOf<Api?>(null) }
     var devices by remember { mutableStateOf<List<Device>>(emptyList()) }
     var shown by remember { mutableStateOf<Pair<Device, Challenge>?>(null) }
+    var broadcasting by remember { mutableStateOf<Device?>(null) }
+    var finding by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
 
@@ -90,12 +92,18 @@ fun App() {
 
         code != null -> CodeScreen(code.first, code.second) { shown = null }
 
+        broadcasting != null -> BroadcastScreen(current, broadcasting!!) { broadcasting = null }
+
+        finding -> FinderScreen(current) { finding = false }
+
         else -> DevicesScreen(
             devices = devices,
             busy = busy,
             message = message,
             onRefresh = { work { devices = current.devices() } },
             onShowCode = { d -> work { shown = d to current.showCode(d.id) } },
+            onBroadcast = { d -> broadcasting = d },
+            onFinder = { finding = true },
             onSignOut = { api = null; devices = emptyList(); message = null },
         )
     }
@@ -149,6 +157,8 @@ fun DevicesScreen(
     message: String?,
     onRefresh: () -> Unit,
     onShowCode: (Device) -> Unit,
+    onBroadcast: (Device) -> Unit,
+    onFinder: () -> Unit,
     onSignOut: () -> Unit,
 ) {
     Column(
@@ -167,10 +177,18 @@ fun DevicesScreen(
                     Text(d.model)
                     if (d.status == "verified") {
                         Text("Ownership confirmed", color = MaterialTheme.colorScheme.primary)
+                        Button(onClick = { onBroadcast(d) }, enabled = !busy) { Text("Broadcast my beacon") }
                     } else {
                         Button(onClick = { onShowCode(d) }, enabled = !busy) { Text("Show my code") }
                     }
                 }
+            }
+        }
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("Finder mode", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                Text("Use this phone to listen for lost TraceLink phones nearby and report where you heard them.")
+                Button(onClick = onFinder, enabled = !busy) { Text("Open finder mode") }
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {

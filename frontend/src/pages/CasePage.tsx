@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, type CaseT, type Device, type ExplanationResponse, type Observation, type Scenario } from "../api";
+import { api, type CaseT, type Device, type ExplanationResponse, type Lang, type Observation, type Scenario } from "../api";
 import { ExplanationPanel } from "../components/ExplanationPanel";
+import { LastHeard } from "../components/LastHeard";
 import { Ledger } from "../components/Ledger";
+import { ReportDraftPanel } from "../components/ReportDraft";
 import { Stepper } from "../components/Stepper";
+import { StreetMap } from "../components/StreetMap";
 import { TraceChart } from "../components/TraceChart";
 
 const SCENARIOS: { key: Scenario; title: string; text: string }[] = [
@@ -24,7 +27,13 @@ export function CasePage({ caseId, onBack, onError, onToast }: {
   const [busy, setBusy] = useState(false);
   const [explaining, setExplaining] = useState(false);
   const [result, setResult] = useState<ExplanationResponse | null>(null);
+  const [lang, setLang] = useState<Lang>(() => {
+    try { return localStorage.getItem("tl_lang") === "fr" ? "fr" : "en"; } catch { return "en"; }
+  });
   const menuRef = useRef<HTMLDivElement>(null);
+  const [view, setView] = useState<"street" | "chart">(() => {
+    try { return localStorage.getItem("tl_view") === "chart" ? "chart" : "street"; } catch { return "street"; }
+  });
 
   const load = useCallback(async () => {
     try {
@@ -57,9 +66,18 @@ export function CasePage({ caseId, onBack, onError, onToast }: {
       setResult(null); await load();
     } catch (e) { onError((e as Error).message); } finally { setBusy(false); }
   }
-  async function explain() {
+  async function explain(l: Lang = lang) {
     setExplaining(true);
-    try { setResult(await api.explain(caseId)); } catch (e) { onError((e as Error).message); } finally { setExplaining(false); }
+    try { setResult(await api.explain(caseId, l)); } catch (e) { onError((e as Error).message); } finally { setExplaining(false); }
+  }
+  function changeView(v: "street" | "chart") {
+    setView(v);
+    try { localStorage.setItem("tl_view", v); } catch { /* ignore */ }
+  }
+  function changeLang(l: Lang) {
+    setLang(l);
+    try { localStorage.setItem("tl_lang", l); } catch { /* ignore */ }
+    if (result) void explain(l);
   }
   async function move(kind: "recovered" | "close") {
     try { setCase(await (kind === "recovered" ? api.recovered(caseId) : api.close(caseId))); onToast(kind === "recovered" ? "Marked as recovered" : "Case closed"); }
@@ -89,10 +107,18 @@ export function CasePage({ caseId, onBack, onError, onToast }: {
         </div>
       )}
 
+      <LastHeard observations={obs} />
+
       <div className="case-grid">
         <div className="chart-wrap">
           <div className="chart-title">
-            <h2>Sightings chart</h2>
+            <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+              <h2>Sightings chart</h2>
+              <div className="seg light" role="group" aria-label="Map type">
+                <button className={view === "street" ? "on" : ""} aria-pressed={view === "street"} onClick={() => changeView("street")}>Street map</button>
+                <button className={view === "chart" ? "on" : ""} aria-pressed={view === "chart"} onClick={() => changeView("chart")}>Chart</button>
+              </div>
+            </div>
             {accepting && (
               <div className="sim-menu" ref={menuRef}>
                 <button className="btn small ghost" onClick={() => setMenu((m) => !m)} aria-expanded={menu} aria-haspopup="menu" disabled={busy}>
@@ -113,7 +139,9 @@ export function CasePage({ caseId, onBack, onError, onToast }: {
                 <h3>No sightings yet</h3>
                 <p className="muted measure">Real sightings need a finder device, which is not built yet. Use “Add demo sightings” to see how the checks and the explanation work.</p>
               </div>
-            : <TraceChart observations={obs} lit={lit} onHover={setHover} />}
+            : view === "street"
+              ? <StreetMap observations={obs} lit={lit} onHover={setHover} />
+              : <TraceChart observations={obs} lit={lit} onHover={setHover} />}
           <div className="legend">
             <span><i className="c" />Passed checks</span>
             <span><i className="d" />Flagged</span>
@@ -129,7 +157,8 @@ export function CasePage({ caseId, onBack, onError, onToast }: {
       </div>
 
       <ExplanationPanel busy={explaining} result={result} observations={obs} canExplain={obs.length > 0}
-        onExplain={explain} onLit={setCited} />
+        lang={lang} onLang={changeLang} onExplain={() => explain()} onLit={setCited} />
+      <ReportDraftPanel caseId={caseId} lang={lang} canDraft={!!device} onError={onError} />
     </div>
   );
 }

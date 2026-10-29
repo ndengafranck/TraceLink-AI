@@ -264,3 +264,50 @@ Limits: the guard blocks listed words, not every possible bad phrasing; the rate
 | Each audit call commits on its own | A failed action (wrong password) is still recorded. |
 | Audit has no foreign key to devices | The record of a deletion survives the deletion. |
 | Seed script goes through the real API | The demo data takes the same path as real data, so the demo cannot show something the rules would reject. |
+
+
+## Slice 13: language, report draft, evaluation
+
+| Decision | Why |
+|---|---|
+| Fixed wording for both languages lives in one module (`text.py`) | The product stays correct and reviewable in French and English even with the AI off. |
+| Report draft: facts by code, prose by AI | A letter to the police must not contain an invented fact. The model can only write two short fields, both checked; everything else comes from the database. Same principle as the explanation, applied to a document. |
+| Full IMEI never included | It is the most sensitive field. The owner writes it by hand, and it never reaches the model or the draft. |
+| Draft states a DEMO ownership check and simulated data | A document that leaves the system must not overstate what was verified. |
+| Times in the draft are UTC and labelled; the AI may not write times | The model's clock differs from the screen's. Code-written, labelled times cannot disagree with the list. |
+| `_converse` loop shared by both AI jobs, with a `Trace` | One tested safety net (schema, guard, one repair, fallback), and the evaluation can measure what happened inside it. |
+| Evaluation labels MOCK runs as such | A stand-in model can test the harness, not the model. The report says so at the top. |
+| "No more sightings than stored" check | Found as a gap while designing the evaluation: invented counts are a real way for a model to mislead. |
+
+
+## Slice 14: what the first live evaluation showed
+
+First real run of `muse-spark-1.3` (`backend/evals/LIVE_REPORT_2026-10-28.md`): 17 of 17 answers valid and safe on the first try, 0 repairs, text in the requested language in 20 of 20 runs, 0 bad answers shown. Two problems it exposed, both fixed:
+
+| Finding | Cause | Fix |
+|---|---|---|
+| Median 15.9 s, slowest 36 s per explanation | About 3 model calls per run (tool round trips) with always-on reasoning | The counted case summary is given in the first message, so the model needs one tool call fewer. Expected to save about one call (roughly 5 s); to be confirmed by a new live run. |
+| 1 run in 18 failed with "unavailable" | A single request took 36 s and the client timeout was 30 s | Timeout raised to 60 s. One quick retry for rate limits, server errors and dropped connections (not for read timeouts). |
+| Report counted the failed run as a failed first answer | The metric counted runs, not answers | Percentages now count only runs where the model gave a first answer, and unavailable runs are listed separately. |
+
+Not shown by this run: the safety checks never fired on the live model (0 problems caught). They are proven by the scripted tests and the mock run, not by live behaviour; the live run says only that Muse Spark followed the rules in 17 of 17 cases.
+
+## Slice 15: "Where is my phone?" — street map and Last heard card
+
+**Problem.** The abstract chart showed relative positions only. An owner could not tell where on the ground a sighting was.
+
+**Decision.** The case page now opens on a real street map (Leaflet + OpenStreetMap tiles) and shows a "Last heard" card above it. The card takes the newest sighting that passed every check and says how long ago it was and the error radius ("2 min ago, within about 35 m"). A link opens that point in OpenStreetMap. The old chart stays as a toggle.
+
+**What it deliberately does not say.** It is not a live pin. A sighting is where a finder's phone heard the beacon (BLE range plus GPS error), and the lost phone may have moved. The card says so and tells the owner to share it with the police and not go alone. Flagged and rejected sightings are never used for "last heard". When every sighting is simulated, the card carries a "Demo data" chip.
+
+**Privacy.** Map tiles load from tile.openstreetmap.org, which sees the area being viewed (not the account, case or device). This is stated under the map. Production would need a tile provider agreement and a self-hosted or paid tile source.
+
+**Not verified in the sandbox.** Real tile imagery (no internet there). Markers, error rings, hover and citation highlighting, the toggle, and mobile layout were checked in a browser with tiles blocked.
+
+## Slice 16: Android Bluetooth (broadcast, finder)
+
+- **Packet.** A non-connectable legacy advertisement with one 16-bit service UUID (`0xFFF4`) and the 8-byte rotating ID as service data: 16 of 31 bytes. Chosen after the nRF Connect check: both test phones support peripheral mode and 31-byte legacy advertising, and neither supports extended advertising, so nothing larger would work.
+- **Same formula on both sides.** `Beacon.kt` mirrors `backend/app/beacon.py`. Checked on the JVM against the backend's test vector (`49fddab5e57da4b6`, `89ea7a65868fb23c`).
+- **Finder sends raw IDs; the server decides.** The app never learns whose phone it heard. The server matches only devices with an active case and always answers "received".
+- **Position.** The finder attaches its own GPS fix, refuses fixes older than 60 s, and sends at most one report per beacon per minute (the server allows 120 per hour per account).
+- **Limits.** Foreground only. Secret in app-private storage, not hardware-backed. Android code not compiled in the sandbox; real Bluetooth between two phones is untested.

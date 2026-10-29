@@ -74,4 +74,22 @@ class Api(baseUrl: String) {
         val o = JSONObject(call("POST", "/companion/devices/$deviceId/challenge"))
         return Challenge(o.getString("code"), o.getString("expires_at"))
     }
+
+    /** The verified phone gets its beacon secret (the same one again if asked twice). */
+    fun enroll(deviceId: String): ByteArray {
+        val o = JSONObject(call("POST", "/companion/devices/$deviceId/enroll"))
+        return java.util.Base64.getUrlDecoder().decode(o.getString("beacon_secret"))
+    }
+
+    /** A finder phone says: I heard this beacon here. The server always answers "received". */
+    fun report(beaconId: String, observedAt: String, lat: Double, lon: Double, accuracyM: Double, nonce: String) {
+        val body = JSONObject()
+            .put("beacon_id", beaconId)
+            .put("observed_at", observedAt)
+            .put("lat", lat)
+            .put("lon", lon)
+            .put("accuracy_m", accuracyM)
+            .put("nonce", nonce)
+        call("POST", "/reports", body)
+    }
 }

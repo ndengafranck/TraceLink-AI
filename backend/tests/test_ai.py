@@ -202,8 +202,8 @@ def test_requires_login(client, case):
 def test_explanation_requests_are_rate_limited(client, case):
     cid, h = case
     use(None)
-    codes = [explain(client, cid, h).status_code for _ in range(11)]
-    assert codes[:10] == [200] * 10 and codes[10] == 429
+    codes = [explain(client, cid, h).status_code for _ in range(21)]
+    assert codes[:20] == [200] * 20 and codes[20] == 429
 
 
 def test_tools_only_see_this_cases_observations(client, case, db_session):
@@ -311,3 +311,69 @@ def test_model_never_sees_absolute_times(client, case, db_session):
     mine = list(db_session.scalars(select(Observation)))
     out = run_tool("list_observations", {}, mine, datetime.now(timezone.utc))
     assert "observed_at" not in out and "age_minutes" in out
+
+
+# --- retry and timeout behaviour of the real HTTP client ---------------------------
+
+def test_http_client_retries_once_on_a_server_error_then_succeeds(monkeypatch):
+    calls = []
+
+    def fake_post(url, json, headers, timeout):
+        calls.append(timeout)
+        req = httpx.Request("POST", url)
+        if len(calls) == 1:
+            return httpx.Response(503, json={}, request=req)
+        return httpx.Response(200, json={"choices": [{"message": {"content": "ok"}}]}, request=req)
+
+    monkeypatch.setattr(httpx, "post", fake_post)
+    monkeypatch.setattr("app.ai.client.time.sleep", lambda s: None)
+    assert HttpModelClient(_settings()).chat(messages=[])["content"] == "ok"
+    assert len(calls) == 2 and calls[0] == 60.0
+
+
+def test_http_client_does_not_retry_a_timeout_or_a_client_error(monkeypatch):
+    n = {"calls": 0}
+
+    def timeout_post(url, json, headers, timeout):
+        n["calls"] += 1
+        raise httpx.ReadTimeout("slow", request=httpx.Request("POST", url))
+
+    monkeypatch.setattr(httpx, "post", timeout_post)
+    with pytest.raises(ModelUnavailable):
+        HttpModelClient(_settings()).chat(messages=[])
+    assert n["calls"] == 1
+
+    n["calls"] = 0
+
+    def bad_request(url, json, headers, timeout):
+        n["calls"] += 1
+        return httpx.Response(400, json={}, request=httpx.Request("POST", url))
+
+    monkeypatch.setattr(httpx, "post", bad_request)
+    with pytest.raises(ModelUnavailable):
+        HttpModelClient(_settings()).chat(messages=[])
+    assert n["calls"] == 1
+
+
+def test_http_client_gives_up_after_two_failures(monkeypatch):
+    n = {"calls": 0}
+
+    def always_503(url, json, headers, timeout):
+        n["calls"] += 1
+        return httpx.Response(503, json={}, request=httpx.Request("POST", url))
+
+    monkeypatch.setattr(httpx, "post", always_503)
+    monkeypatch.setattr("app.ai.client.time.sleep", lambda s: None)
+    with pytest.raises(ModelUnavailable):
+        HttpModelClient(_settings()).chat(messages=[])
+    assert n["calls"] == 2
+
+
+def test_the_model_is_given_the_counted_summary_up_front(client, case):
+    cid, h = case
+    real = ids(client, cid, h)
+    fake = FakeClient(answer(real[:1]))
+    use(fake)
+    explain(client, cid, h)
+    first_user = fake.calls[0][1]["content"]
+    assert "Case summary (counted by the system)" in first_user and f'"total": {len(real)}' in first_user

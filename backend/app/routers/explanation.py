@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app import audit
 from app.ai.client import ModelClient, build_client
-from app.ai.schemas import ExplanationResponse
+from app.ai.schemas import ExplainIn, ExplanationResponse
 from app.ai.service import explain
 from app.config import get_settings
 from app.db import get_db
@@ -26,6 +26,7 @@ def get_model_client() -> ModelClient | None:
 @router.post("", response_model=ExplanationResponse)
 def explain_case(
     case_id: str,
+    body: ExplainIn | None = None,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     client: ModelClient | None = Depends(get_model_client),
@@ -36,6 +37,7 @@ def explain_case(
     if not explain_limiter.allow(user.id, settings.explain_per_hour):
         raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "Too many explanation requests")
     observations = list(db.scalars(select(Observation).where(Observation.case_id == case.id)))
-    result = explain(settings, client, observations, datetime.now(timezone.utc))
+    language = (body or ExplainIn()).language
+    result = explain(settings, client, observations, datetime.now(timezone.utc), language)
     audit.record(db, user.id, "explanation_requested", "case", case.id, result.source)
     return result

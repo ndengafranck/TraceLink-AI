@@ -1,37 +1,37 @@
-import type { ExplanationResponse, Observation } from "../api";
-import { numbering, FLAG_TEXT } from "./TraceChart";
-
-const REASONS: Record<string, string> = {
-  no_sightings: "There are no sightings to explain yet.",
-  ai_not_configured: "The AI is not set up on this server.",
-  ai_unavailable: "The AI service could not be reached.",
-  ai_output_rejected: "The AI's answer failed our safety checks, so it was not shown.",
-  ai_too_many_steps: "The AI took too many steps, so it was stopped.",
-};
+import type { ExplanationResponse, Lang, Observation } from "../api";
+import { FLAGS, PANEL, REASONS } from "./i18n";
+import { numbering } from "./TraceChart";
 
 interface Props {
   busy: boolean;
   result: ExplanationResponse | null;
   observations: Observation[];
   canExplain: boolean;
+  lang: Lang;
+  onLang: (l: Lang) => void;
   onExplain: () => void;
   onLit: (ids: string[]) => void;
 }
 
-export function ExplanationPanel({ busy, result, observations, canExplain, onExplain, onLit }: Props) {
+export function ExplanationPanel({ busy, result, observations, canExplain, lang, onLang, onExplain, onLit }: Props) {
   const nums = numbering(observations);
+  const t = PANEL[lang];
   return (
-    <section className="explain" aria-labelledby="explain-h" aria-busy={busy}>
+    <section className="explain" aria-labelledby="explain-h" aria-busy={busy} lang={lang}>
       <div className="topline">
         <div>
-          <h2 id="explain-h">What the evidence supports</h2>
-          <p style={{ color: "#b9c8d0", marginTop: 6 }} className="measure">
-            Counts come from fixed rules. The explanation is written by AI and every statement points to sightings you can check.
-          </p>
+          <h2 id="explain-h">{t.title}</h2>
+          <p style={{ color: "#b9c8d0", marginTop: 6 }} className="measure">{t.intro}</p>
         </div>
-        <button className="btn" onClick={onExplain} disabled={busy || !canExplain}>
-          {busy ? "Reading the evidence…" : result ? "Explain again" : "Explain the evidence"}
-        </button>
+        <div className="panel-actions">
+          <div className="seg" role="group" aria-label={t.lang}>
+            <button className={lang === "en" ? "on" : ""} aria-pressed={lang === "en"} onClick={() => onLang("en")}>English</button>
+            <button className={lang === "fr" ? "on" : ""} aria-pressed={lang === "fr"} onClick={() => onLang("fr")}>Français</button>
+          </div>
+          <button className="btn" onClick={onExplain} disabled={busy || !canExplain}>
+            {busy ? t.busy : result ? t.again : t.explain}
+          </button>
+        </div>
       </div>
 
       {busy && !result && (
@@ -42,29 +42,29 @@ export function ExplanationPanel({ busy, result, observations, canExplain, onExp
       )}
 
       {result && (
-        <div className="explain-body reveal" key={result.explanation.headline + result.source}>
+        <div className="explain-body reveal" key={result.explanation.headline + result.source + result.language}>
           <div className="facts">
             <div className="src">
               <span className="big">{result.facts.total}</span>
-              <span>sightings stored</span>
+              <span>{t.stored}</span>
               <div className="pair" style={{ marginTop: 8 }}>
-                <div><b>{result.facts.accepted}</b>passed</div>
-                <div><b>{result.facts.flagged}</b>flagged</div>
+                <div><b>{result.facts.accepted}</b>{t.passed}</div>
+                <div><b>{result.facts.flagged}</b>{t.flagged}</div>
               </div>
             </div>
             {Object.keys(result.facts.flag_counts).length > 0 && (
               <ul>
                 {Object.entries(result.facts.flag_counts).map(([f, n]) => (
-                  <li key={f}><b>{n}</b> × {FLAG_TEXT[f] ?? f}</li>
+                  <li key={f}><b>{n}</b> × {FLAGS[lang][f] ?? f}</li>
                 ))}
               </ul>
             )}
             <div className="src">
-              <b>{result.source === "ai" ? `Written by AI (${result.model})` : "Standard summary, AI not used"}</b>
+              <b>{result.source === "ai" ? `${t.writtenBy} (${result.model})` : t.standard}</b>
               {result.source === "fallback" && result.fallback_reason && (
-                <span>{REASONS[result.fallback_reason] ?? result.fallback_reason}</span>
+                <span>{REASONS[lang][result.fallback_reason] ?? result.fallback_reason}</span>
               )}
-              {result.source === "ai" && <span>Checked: every cited sighting exists, no invented places, no accusations.</span>}
+              {result.source === "ai" && <span>{t.checked}</span>}
             </div>
           </div>
 
@@ -74,15 +74,14 @@ export function ExplanationPanel({ busy, result, observations, canExplain, onExp
               <div className="finding" key={i}>
                 <p>{f.text}</p>
                 <div className="cites">
-                  <span className="sr">Sightings cited:</span>
                   {f.observation_ids.map((id) => nums.has(id) && (
-                    <button key={id} className="cite" aria-label={`Show sighting ${nums.get(id)} on the chart`}
+                    <button key={id} className="cite" aria-label={t.showSighting.replace("{n}", String(nums.get(id)))}
                       onMouseEnter={() => onLit([id])} onMouseLeave={() => onLit([])}
                       onFocus={() => onLit([id])} onBlur={() => onLit([])}>{nums.get(id)}</button>
                   ))}
                   {f.observation_ids.length > 1 && (
                     <button className="cite" onMouseEnter={() => onLit(f.observation_ids)} onMouseLeave={() => onLit([])}
-                      onFocus={() => onLit(f.observation_ids)} onBlur={() => onLit([])}>All</button>
+                      onFocus={() => onLit(f.observation_ids)} onBlur={() => onLit([])}>{t.all}</button>
                   )}
                 </div>
               </div>
@@ -90,11 +89,11 @@ export function ExplanationPanel({ busy, result, observations, canExplain, onExp
 
             <div className="cols">
               <div>
-                <h4>What to do next</h4>
+                <h4>{t.next}</h4>
                 <ul>{result.explanation.guidance.map((g, i) => <li key={i}>{g}</li>)}</ul>
               </div>
               <div className="uncertain">
-                <h4>What this cannot tell you</h4>
+                <h4>{t.cannot}</h4>
                 <ul>{result.explanation.uncertainty.map((u, i) => <li key={i}>{u}</li>)}</ul>
               </div>
             </div>

@@ -31,8 +31,37 @@ class Facts(BaseModel):
     all_simulated: bool
 
 
+class ExplainIn(BaseModel):
+    language: Literal["en", "fr"] = "en"
+
+
+class ReportDraftIn(BaseModel):
+    language: Literal["en", "fr"] = "en"
+    audience: Literal["police", "operator"] = "police"
+
+
+class Narrative(BaseModel):
+    """What the model may write for a report: prose only. All facts are added by code."""
+
+    model_config = ConfigDict(extra="forbid")
+    summary: str = Field(min_length=20, max_length=900)
+    requests: list[str] = Field(min_length=1, max_length=4)
+
+
+class ReportDraftResponse(BaseModel):
+    source: Literal["ai", "fallback"]
+    model: str | None
+    fallback_reason: str | None
+    language: Literal["en", "fr"]
+    audience: Literal["police", "operator"]
+    title: str
+    body: str
+    notice: str
+
+
 class ExplanationResponse(BaseModel):
     source: Literal["ai", "fallback"]
+    language: Literal["en", "fr"] = "en"
     model: str | None
     fallback_reason: str | None
     explanation: Explanation

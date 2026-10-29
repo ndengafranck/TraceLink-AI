@@ -5,11 +5,15 @@ uses `HttpModelClient`. The API key is read from settings and is never logged
 or included in any error text.
 """
 
+import time
 from typing import Any, Protocol
 
 import httpx
 
 from app.config import Settings
+
+
+RETRYABLE_STATUS = {429, 500, 502, 503, 504}
 
 
 class ModelUnavailable(Exception):
@@ -48,19 +52,31 @@ class HttpModelClient:
             body["tool_choice"] = "auto"
         if response_format:
             body["response_format"] = response_format
-        try:
-            r = httpx.post(
-                self._url,
-                json=body,
-                headers={"Authorization": f"Bearer {self._key}"},
-                timeout=self._timeout,
-            )
-            r.raise_for_status()
-            return r.json()["choices"][0]["message"]
-        except httpx.HTTPStatusError as e:
-            raise ModelUnavailable(f"model API returned HTTP {e.response.status_code}") from None
-        except (httpx.HTTPError, KeyError, IndexError, ValueError):
-            raise ModelUnavailable("model API unreachable or malformed answer") from None
+        # One quick retry for short-lived trouble (rate limit, server error, dropped connection).
+        # A read timeout is not retried: that request already waited the full time.
+        for attempt in (1, 2):
+            try:
+                r = httpx.post(
+                    self._url,
+                    json=body,
+                    headers={"Authorization": f"Bearer {self._key}"},
+                    timeout=self._timeout,
+                )
+                r.raise_for_status()
+                return r.json()["choices"][0]["message"]
+            except httpx.HTTPStatusError as e:
+                if attempt == 1 and e.response.status_code in RETRYABLE_STATUS:
+                    time.sleep(1.5)
+                    continue
+                raise ModelUnavailable(f"model API returned HTTP {e.response.status_code}") from None
+            except httpx.ConnectError:
+                if attempt == 1:
+                    time.sleep(1.5)
+                    continue
+                raise ModelUnavailable("model API unreachable") from None
+            except (httpx.HTTPError, KeyError, IndexError, ValueError):
+                raise ModelUnavailable("model API unreachable or malformed answer") from None
+        raise ModelUnavailable("model API unreachable")
 
 
 def build_client(settings: Settings) -> ModelClient | None:

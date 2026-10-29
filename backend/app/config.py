@@ -29,11 +29,11 @@ class Settings(BaseSettings):
     model_api_key: str = ""
     model_base_url: str = "https://api.meta.ai/v1"
     model_name: str = "muse-spark-1.3"
-    model_timeout_s: float = 30.0
+    model_timeout_s: float = 60.0
     # Send a JSON-schema response_format. Turn off if the provider rejects it
     # (the answer is validated with Pydantic either way).
     model_structured_output: bool = True
-    explain_per_hour: int = 10
+    explain_per_hour: int = 20
     # Bluetooth sighting reports accepted per finder account per hour.
     reports_per_hour: int = 120
 

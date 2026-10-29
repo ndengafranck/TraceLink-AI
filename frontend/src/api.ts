@@ -21,7 +21,14 @@ export interface Facts {
   total: number; accepted: number; flagged: number; flag_counts: Record<string, number>;
   latest_observed_at: string | null; all_simulated: boolean;
 }
+export type Lang = "en" | "fr";
+export type Audience = "police" | "operator";
+export interface ReportDraft {
+  source: "ai" | "fallback"; model: string | null; fallback_reason: string | null;
+  language: Lang; audience: Audience; title: string; body: string; notice: string;
+}
 export interface ExplanationResponse {
+  language: Lang;
   source: "ai" | "fallback"; model: string | null; fallback_reason: string | null;
   explanation: Explanation; facts: Facts; notice: string;
 }
@@ -100,5 +107,8 @@ export const api = {
   observations: (id: string) => req<Observation[]>("GET", `/cases/${id}/observations`),
   simulate: (id: string, scenario: Scenario) =>
     req<Simulation>("POST", `/cases/${id}/observations/simulate`, { scenario }),
-  explain: (id: string) => req<ExplanationResponse>("POST", `/cases/${id}/explanation`),
+  explain: (id: string, language: Lang) =>
+    req<ExplanationResponse>("POST", `/cases/${id}/explanation`, { language }),
+  reportDraft: (id: string, language: Lang, audience: Audience) =>
+    req<ReportDraft>("POST", `/cases/${id}/report-draft`, { language, audience }),
 };

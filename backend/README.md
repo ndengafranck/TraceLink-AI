@@ -98,6 +98,13 @@ python3 -m pytest -q        # uses an in-memory database, needs no setup
 - **Audit trail:** `GET /audit` returns your own recent actions (registered, login, login_failed, device_added, device_deleted, code_requested, ownership_verified, beacon_enrolled, case_opened/recovered/closed, demo_sightings_added, sighting_received, explanation_requested). It stores ids and short labels only: never passwords, codes, IMEIs, secrets or coordinates (tested). New table `audit_events`; no migration needed.
 - **Demo data:** `python seed_demo.py` (with `DEMO_MODE=true`) creates `demo@example.com` / `demo-password-2026` with a verified phone, an open case with simulated sightings, and a second unverified phone. Safe to run again.
 
+## Slice 13 (done): French/English, report draft, AI evaluation
+
+- **Language:** `POST /cases/{id}/explanation` takes an optional `{"language": "en" | "fr"}`. The model is told which language to write in; the fixed fallback wording, notices and report layout exist in both (`app/ai/text.py`). The checks also block French decision words (volé, voleur, certainement...) and French clock times ("12h08"). The website's menus and buttons are still English; the explanation and report draft follow the language switch.
+- **Report draft:** `POST /cases/{id}/report-draft` with `{"audience": "police" | "operator", "language": ...}` returns an editable text message. **The facts are written by code** (phone model, last 4 digits of the IMEI, ownership-check type, case date, the sighting list with UTC times); **the AI writes only a short summary and the requests.** The full IMEI is never in the draft or sent to the model. A DEMO ownership check and simulated sightings are stated in the text. It uses the same checks and fixed fallback as the explanation, and shares the hourly AI limit (default 20).
+- **New check:** the AI may not claim more sightings than the case holds.
+- **Evaluation:** `python -m evals.run` (from `backend/`, environment active) runs 10 fixed cases in English and French and writes `evals/REPORT.md` and `evals/results.json`. With `MODEL_API_KEY` set it is a **live** run of the real model (about 20 runs, a few cents); `--mock` runs a scripted stand-in with deliberate mistakes, labelled as such in the report, to test the harness. Measures: valid JSON first try, safety checks first try, repair rate, AI vs fallback, mistakes caught, language, latency. Ten cases are a smoke test, not a benchmark.
+
 ## Frontend
 
 See `../frontend/README.md`. Start this API with `DEMO_MODE=true`, then `npm run dev` in `frontend/`.
